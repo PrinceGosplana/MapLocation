@@ -253,10 +253,235 @@ typedef void (^LocationCallback)(CLLocationCoordinate2D);
         MKMapItem *item = _foundMapItems[buttonIndex];
         NSLog(@"Selected item: %@", item);
         // TODO: Calculate route
-        _searchBar.userInteractionEnabled = YES;
+        [self calculateRouteToMapItem:item];
     } else {
         _searchBar.userInteractionEnabled = YES;
     }
 }
 
+// find those airports
+- (void) calculateRouteToMapItem: (MKMapItem *) item {
+//    [self performAfterFindingLocation:^(CLLocationCoordinate2D userLocation) {
+//        MKPointAnnotation * sourceAnnotation = [MKPointAnnotation new];
+//        sourceAnnotation.coordinate = userLocation;
+//        sourceAnnotation.title = @"Start";
+//        
+//        MKPointAnnotation * destinationAnnotation = [MKPointAnnotation new];
+//        destinationAnnotation.coordinate = item.placemark.coordinate;
+//        destinationAnnotation.title = @"End";
+//        
+//        Airport * sourceAirport = [self nearestAirportToCoordinate:userLocation];
+//        Airport * destinationAirport = [self nearestAirportToCoordinate:item.placemark.coordinate];
+//        
+//        // 1
+//        MKMapItem * sourceMapItem = [self mapItemForCoordinate:userLocation];
+//        MKMapItem * destinationMapItem = item;
+//        // 2
+//        MKMapItem * sourceAirpotrtMapItem = [self mapItemForCoordinate:sourceAirport.coordinate];
+//        sourceAirpotrtMapItem.name = sourceAirport.title;
+//        
+//        MKMapItem * desctinationAirportMapItem = [self mapItemForCoordinate:destinationAirport.coordinate];
+//        desctinationAirportMapItem.name = destinationAirport.title;
+//        
+//        __block MKRoute * toSourceAirportDirectionsRoute = nil;
+//        __block MKRoute * fromDestinationAirportDirectionsRoute = nil;
+//        
+//        // 3
+//        dispatch_group_t group = dispatch_group_create();
+//        
+//        // 4
+//        // find route to source airport
+//        dispatch_group_enter(group);
+//        [self obtainDirectionsFrom:sourceMapItem to:sourceAirpotrtMapItem completion:^(MKRoute * route, NSError * error) {
+//            toSourceAirportDirectionsRoute = route;
+//            dispatch_group_leave(group);
+//        }];
+//        
+//        // 5
+//        // find route from destination airport
+//        dispatch_group_enter(group);
+//        [self obtainDirectionsFrom:desctinationAirportMapItem to:destinationMapItem completion:^(MKRoute * route, NSError * error) {
+//            fromDestinationAirportDirectionsRoute = route;
+//            dispatch_group_leave(group);
+//        }];
+//        
+//        // 6
+//        // when both are found, setup new route
+//        dispatch_group_notify(group, dispatch_get_main_queue(), ^{
+//            if (toSourceAirportDirectionsRoute && fromDestinationAirportDirectionsRoute) {
+//                Route * route = [Route new];
+//                route.source = sourceAnnotation;
+//                route.destination = destinationAnnotation;
+//                route.sourceAirport = sourceAirport;
+//                route.destinationAirport = destinationAirport;
+//                route.toSourceAirportRoute = toSourceAirportDirectionsRoute;
+//                route.fromDestinationAirportRoute = fromDestinationAirportDirectionsRoute;
+//                
+//                CLLocationCoordinate2D coords[2] = {
+//                    sourceAirport.coordinate,
+//                    destinationAirport.coordinate
+//                };
+//                route.flyPartPolyline = [MKGeodesicPolyline polylineWithCoordinates:coords count:2];
+//                [self setupWithNewRoute:route];
+//            } else {
+//                UIAlertView * alert = [[UIAlertView alloc] initWithTitle:@"Oops!" message:@"Failed to find directions! Please try again" delegate:nil cancelButtonTitle:nil otherButtonTitles:@"OK", nil];
+//                [alert show];
+//            }
+//            _searchBar.userInteractionEnabled = YES;
+//        });
+//        
+//    }];
+    [self performAfterFindingLocation:^(CLLocationCoordinate2D userLocation) {
+        // 2
+        MKPointAnnotation *sourceAnnotation = [MKPointAnnotation new];
+        sourceAnnotation.coordinate = userLocation;
+        sourceAnnotation.title = @"Start";
+        
+        MKPointAnnotation *destinationAnnotation = [MKPointAnnotation new];
+        destinationAnnotation.coordinate = item.placemark.coordinate;
+        destinationAnnotation.title = @"End";
+        
+        // 3
+        Airport *sourceAirport = [self nearestAirportToCoordinate:userLocation];
+        Airport *destinationAirport = [self nearestAirportToCoordinate:item.placemark.coordinate];
+        
+        // 1
+        MKMapItem *sourceMapItem = [self mapItemForCoordinate:userLocation];
+        MKMapItem *destinationMapItem = item;
+        
+        // 2
+        MKMapItem *sourceAirportMapItem = [self mapItemForCoordinate:sourceAirport.coordinate];
+        sourceAirportMapItem.name = sourceAirport.title;
+        
+        MKMapItem *destinationAirportMapItem = [self mapItemForCoordinate:destinationAirport.coordinate];
+        destinationAirportMapItem.name = destinationAirport.title;
+        
+        __block MKRoute *toSourceAirportDirectionsRoute = nil;
+        __block MKRoute *fromDestinationAirportDirectionsRoute = nil;
+        
+        // 3
+        dispatch_group_t group = dispatch_group_create();
+        
+        // 4
+        // Find route to source airport
+        dispatch_group_enter(group);
+        [self obtainDirectionsFrom:sourceMapItem
+                                to:sourceAirportMapItem
+                        completion:^(MKRoute *route, NSError *error) {
+                            toSourceAirportDirectionsRoute = route;
+                            dispatch_group_leave(group);
+                        }];
+        
+        // 5
+        // Find route from destination airport
+        dispatch_group_enter(group);
+        [self obtainDirectionsFrom:destinationAirportMapItem
+                                to:destinationMapItem
+                        completion:^(MKRoute *route, NSError *error) {
+                            fromDestinationAirportDirectionsRoute = route;
+                            dispatch_group_leave(group);
+                        }];
+        
+        // 6
+        // When both are found, setup new route
+        dispatch_group_notify(group, dispatch_get_main_queue(), ^{
+            if (toSourceAirportDirectionsRoute && fromDestinationAirportDirectionsRoute) {
+                Route *route = [Route new];
+                route.source = sourceAnnotation;
+                route.destination = destinationAnnotation;
+                route.sourceAirport = sourceAirport;
+                route.destinationAirport = destinationAirport;
+                route.toSourceAirportRoute = toSourceAirportDirectionsRoute;
+                route.fromDestinationAirportRoute = fromDestinationAirportDirectionsRoute;
+                
+                CLLocationCoordinate2D coords[2] = {sourceAirport.coordinate, destinationAirport.coordinate};
+                route.flyPartPolyline = [MKGeodesicPolyline polylineWithCoordinates:coords count:2];
+                
+                [self setupWithNewRoute:route];
+            } else {
+                UIAlertView *alert = [[UIAlertView alloc] initWithTitle:@"Oops!"
+                                                                message:@"Failed to find directions! Please try again."
+                                                               delegate:nil
+                                                      cancelButtonTitle:nil
+                                                      otherButtonTitles:@"OK", nil];
+                [alert show];
+            }
+            
+            _searchBar.userInteractionEnabled = YES;
+        });
+    }];
+}
+
+- (void) setupWithNewRoute: (Route *) route {
+    if (_route) {
+        [_mapView removeAnnotations:@[_route.source,
+                                      _route.destination,
+                                      _route.sourceAirport,
+                                      _route.destinationAirport]];
+        [_mapView removeOverlays:@[_route.toSourceAirportRoute.polyline,
+                                   _route.flyPartPolyline,
+                                   _route.fromDestinationAirportRoute.polyline]];
+        _route = nil;
+    }
+    
+    _route = route;
+    
+    [_mapView addAnnotations:@[route.source,
+                               route.destination,
+                               route.sourceAirport,
+                               route.destinationAirport]];
+    
+    // adds the geodesic polyline as an overlay
+    [_mapView addOverlay:route.fromDestinationAirportRoute.polyline level:MKOverlayLevelAboveRoads];
+    [_mapView addOverlay:route.flyPartPolyline level:MKOverlayLevelAboveRoads];
+    
+    // calculates the bounding box of all the points
+    MKMapPoint points[4];
+    points[0] = MKMapPointForCoordinate(route.source.coordinate);
+    points[1] = MKMapPointForCoordinate(route.destination.coordinate);
+    points[2] = MKMapPointForCoordinate(route.sourceAirport.coordinate);
+    points[3] = MKMapPointForCoordinate(route.destinationAirport.coordinate);
+    
+    MKCoordinateRegion boundingRegion = CoordinateRegionBoundingMapPoints(points, 4);
+    boundingRegion.span.latitudeDelta *= 1.1f;
+    boundingRegion.span.longitudeDelta *= 1.1f;
+    [_mapView setRegion:boundingRegion animated:YES];
+}
+
+- (MKOverlayRenderer *) mapView:(MKMapView *)mapView rendererForOverlay:(id<MKOverlay>)overlay {
+    if ([overlay isKindOfClass:[MKPolyline class]]) {
+        MKPolylineRenderer *renderer = [[MKPolylineRenderer alloc] initWithPolyline:(MKPolyline*)overlay];
+        
+        if (overlay == _route.flyPartPolyline) {
+            renderer.strokeColor = [UIColor redColor];
+        } else {
+            renderer.strokeColor = [UIColor blueColor];
+        }
+        
+        return renderer;
+    }
+    return nil;
+}
+
+- (void) obtainDirectionsFrom: (MKMapItem *) from to: (MKMapItem *) to completion: (void(^)(MKRoute *, NSError*))completion {
+    MKDirectionsRequest * request = [[MKDirectionsRequest alloc] init];
+    request.source = from;
+    request.destination = to;
+    
+    request.transportType = MKDirectionsTransportTypeAutomobile;
+    
+    MKDirections * directions = [[MKDirections alloc] initWithRequest:request];
+    [directions calculateDirectionsWithCompletionHandler:^(MKDirectionsResponse *response, NSError *error) {
+        MKRoute * route = nil;
+        
+        if (response.routes.count > 0) {
+            route = response.routes[0];
+        } else if (!error) {
+            error = [NSError errorWithDomain:@"com.razware.MapLocation" code:404 userInfo:@{NSLocalizedDescriptionKey: @"No routes found!"}];
+        }
+        if (completion) {
+            completion(route, error);
+        }
+    }];
+}
 @end
