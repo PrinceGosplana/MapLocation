@@ -49,6 +49,7 @@ typedef void (^LocationCallback)(CLLocationCoordinate2D);
     
     _mapView = [[MKMapView alloc] initWithFrame:self.view.frame];
     _mapView.delegate = self;
+    _mapView.showsUserLocation = YES;
     _mapView.pitchEnabled = YES;
     [self.view addSubview:_mapView];
     
@@ -252,11 +253,88 @@ typedef void (^LocationCallback)(CLLocationCoordinate2D);
     if (buttonIndex != actionSheet.cancelButtonIndex) {
         MKMapItem *item = _foundMapItems[buttonIndex];
         NSLog(@"Selected item: %@", item);
-        // TODO: Calculate route
-        _searchBar.userInteractionEnabled = YES;
+        [self calculateRouteToMapItem:item];
     } else {
         _searchBar.userInteractionEnabled = YES;
     }
+}
+
+- (void) setupWithNewRoute:(Route *) route {
+    if (_route) {
+        [_mapView removeAnnotations:@[_route.source,
+                                      _route.destination,
+                                      _route.sourceAirport,
+                                      _route.destinationAirport]];
+        [_mapView removeOverlays:@[_route.flyPartPolyline]];
+        _route = nil;
+    }
+    _route = route;
+    
+    [_mapView addAnnotations:@[route.source,
+                               route.destination,
+                               route.sourceAirport,
+                               route.destinationAirport]];
+    [_mapView addOverlay:route.flyPartPolyline level:MKOverlayLevelAboveRoads];
+    
+    MKMapPoint points[4];
+    points[0] = MKMapPointForCoordinate(route.source.coordinate);
+    points[1] = MKMapPointForCoordinate(route.destination.coordinate);
+    points[2] = MKMapPointForCoordinate(route.sourceAirport.coordinate);
+    points[3] = MKMapPointForCoordinate(route.destinationAirport.coordinate);
+    
+    MKMapPointForCoordinate(route.destinationAirport.coordinate);
+    
+    MKCoordinateRegion boundingRegion = CoordinateRegionBoundingMapPoints(points, 4);
+    boundingRegion.span.latitudeDelta *= 1.1f;
+    boundingRegion.span.longitudeDelta *= 1.1f;
+    [_mapView setRegion:boundingRegion animated:YES];
+
+}
+
+- (void) calculateRouteToMapItem: (MKMapItem *) item {
+    [self performAfterFindingLocation:^(CLLocationCoordinate2D userLocation) {
+        MKPointAnnotation * sourceAnnotation = [MKPointAnnotation new];
+        sourceAnnotation.coordinate = userLocation;
+        sourceAnnotation.title = @"Start";
+        
+        MKPointAnnotation * destinationAnnotation = [MKPointAnnotation new];
+        destinationAnnotation.coordinate = item.placemark.coordinate;
+        destinationAnnotation.title = @"End";
+        
+        // 3
+        Airport * sourceAirport = [self nearestAirportToCoordinate:userLocation];
+        Airport * destinationAirport = [self nearestAirportToCoordinate:item.placemark.coordinate];
+        
+        Route * route = [Route new];
+        route.source = sourceAnnotation;
+        route.destination = destinationAnnotation;
+        route.sourceAirport = sourceAirport;
+        route.destinationAirport = destinationAirport;
+        
+        // 5
+        CLLocationCoordinate2D coords[2] = { sourceAirport.coordinate, destinationAirport.coordinate};
+        route.flyPartPolyline = [MKGeodesicPolyline polylineWithCoordinates:coords count:2];
+        
+        // 6
+        [self setupWithNewRoute:route];
+        
+        // 7
+        _searchBar.userInteractionEnabled = YES;
+    }];
+}
+
+- (MKOverlayRenderer *) mapView:(MKMapView *)mapView rendererForOverlay:(id<MKOverlay>)overlay {
+    if ([overlay isKindOfClass:[MKPolyline class]]) {
+        MKPolylineRenderer * renderer = [[MKPolylineRenderer alloc] initWithPolyline:(MKPolyline *) overlay];
+        
+        if (overlay == _route.flyPartPolyline) {
+            renderer.strokeColor = [UIColor redColor];
+        } else {
+            renderer.strokeColor = [UIColor blueColor];
+        }
+        return renderer;
+    }
+    return nil;
 }
 
 @end
