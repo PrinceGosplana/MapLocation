@@ -10,8 +10,9 @@
 
 @class Route;
 
-@interface DirectionsListViewController : UITableViewController
+@interface DirectionsListViewController : UIViewController <UITableViewDataSource, UITableViewDelegate>
 
 @property (nonatomic, strong) Route *route;
+@property (nonatomic, strong) UITableView * tableView;
 
 @end
